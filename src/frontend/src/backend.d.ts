@@ -16,6 +16,28 @@ export interface Match {
     sport: string;
     location: string;
 }
+export interface UserProfile {
+    name: string;
+    bio: string;
+    avatarUrl: string;
+    skills: Array<string>;
+}
+export interface ProfileEntry {
+    owner: Principal;
+    profile: UserProfile;
+}
+export interface MatchEntry {
+    matched: Principal;
+    profile: UserProfile;
+    mutual: boolean;
+}
+export interface Message {
+    id: string;
+    from: Principal;
+    to: Principal;
+    text: string;
+    createdAt: bigint;
+}
 export enum UserRole {
     admin = "admin",
     user = "user",
@@ -31,4 +53,11 @@ export interface backendInterface {
     joinMatch(id: string): Promise<void>;
     searchMatchesByLocation(location: string): Promise<Array<Match>>;
     searchMatchesBySport(sport: string): Promise<Array<Match>>;
+    getMyProfile(): Promise<UserProfile | null>;
+    updateMyProfile(name: string, bio: string, avatarUrl: string, skills: Array<string>): Promise<void>;
+    getAllProfiles(): Promise<Array<ProfileEntry>>;
+    matchWithUser(target: Principal): Promise<void>;
+    getMyMatches(): Promise<Array<MatchEntry>>;
+    sendMessage(to: Principal, text: string): Promise<string>;
+    getMessages(withUser: Principal): Promise<Array<Message>>;
 }

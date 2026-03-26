@@ -6,12 +6,14 @@ import List "mo:core/List";
 import Time "mo:core/Time";
 import Nat "mo:core/Nat";
 import Map "mo:core/Map";
+import Set "mo:core/Set";
+import Array "mo:core/Array";
 import Principal "mo:core/Principal";
 import MixinAuthorization "authorization/MixinAuthorization";
 import AccessControl "authorization/access-control";
 
 actor {
-  // Type definition
+  // Type definitions
   type Match = {
     id : Text;
     sport : Text;
@@ -27,8 +29,37 @@ actor {
     };
   };
 
+  type UserProfile = {
+    name : Text;
+    bio : Text;
+    avatarUrl : Text;
+    skills : [Text];
+  };
+
+  type ProfileEntry = {
+    owner : Principal;
+    profile : UserProfile;
+  };
+
+  type MatchEntry = {
+    matched : Principal;
+    profile : UserProfile;
+    mutual : Bool;
+  };
+
+  type Message = {
+    id : Text;
+    from : Principal;
+    to : Principal;
+    text : Text;
+    createdAt : Int;
+  };
+
   // State
   let matches = Map.empty<Text, Match>();
+  let profiles = Map.empty<Principal, UserProfile>();
+  let userMatches = Map.empty<Principal, Set.Set<Principal>>();
+  let messages = Map.empty<Text, Message>();
 
   // Authorization system
   let accessControlState = AccessControl.initState();
@@ -42,6 +73,19 @@ actor {
     let id = idCounter;
     idCounter += 1;
     id.toText();
+  };
+
+  // Helper: check if two principals are mutual matches
+  func areMutual(a : Principal, b : Principal) : Bool {
+    let aSet = switch (userMatches.get(a)) {
+      case (?s) { s };
+      case (null) { Set.empty<Principal>() };
+    };
+    let bSet = switch (userMatches.get(b)) {
+      case (?s) { s };
+      case (null) { Set.empty<Principal>() };
+    };
+    aSet.contains(b) and bSet.contains(a);
   };
 
   // Public methods
@@ -104,5 +148,92 @@ actor {
         matches.add(id, updatedMatch);
       };
     };
+  };
+
+  // Profile methods
+
+  public query ({ caller }) func getMyProfile() : async ?UserProfile {
+    profiles.get(caller);
+  };
+
+  public shared ({ caller }) func updateMyProfile(name : Text, bio : Text, avatarUrl : Text, skills : [Text]) : async () {
+    if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
+      Runtime.trap("Unauthorized: Only users can update profiles");
+    };
+    let profile : UserProfile = { name; bio; avatarUrl; skills };
+    profiles.add(caller, profile);
+  };
+
+  // User matching methods
+
+  public query func getAllProfiles() : async [ProfileEntry] {
+    profiles.entries().toArray().map(func((owner, profile)) {
+      { owner; profile };
+    });
+  };
+
+  public shared ({ caller }) func matchWithUser(target : Principal) : async () {
+    if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
+      Runtime.trap("Unauthorized: Only users can match");
+    };
+    if (caller == target) { Runtime.trap("Cannot match with yourself") };
+    let existing = switch (userMatches.get(caller)) {
+      case (?s) { s };
+      case (null) { Set.empty<Principal>() };
+    };
+    existing.add(target);
+    userMatches.add(caller, existing);
+  };
+
+  public query ({ caller }) func getMyMatches() : async [MatchEntry] {
+    let mySet = switch (userMatches.get(caller)) {
+      case (?s) { s };
+      case (null) { Set.empty<Principal>() };
+    };
+    mySet.toArray().filterMap(func(matched) {
+      switch (profiles.get(matched)) {
+        case (null) { null };
+        case (?profile) {
+          let theirSet = switch (userMatches.get(matched)) {
+            case (?s) { s };
+            case (null) { Set.empty<Principal>() };
+          };
+          let mutual = theirSet.contains(caller);
+          ?{ matched; profile; mutual };
+        };
+      };
+    });
+  };
+
+  // Chat methods
+
+  public shared ({ caller }) func sendMessage(to : Principal, text : Text) : async Text {
+    if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
+      Runtime.trap("Unauthorized: Only users can send messages");
+    };
+    if (not areMutual(caller, to)) {
+      Runtime.trap("Cannot message: not a mutual match");
+    };
+    let id = generateId();
+    let msg : Message = {
+      id;
+      from = caller;
+      to;
+      text;
+      createdAt = Time.now();
+    };
+    messages.add(id, msg);
+    id;
+  };
+
+  public query ({ caller }) func getMessages(withUser : Principal) : async [Message] {
+    let all = messages.values().toArray();
+    let filtered = all.filter(func(m : Message) : Bool {
+      (m.from == caller and m.to == withUser) or
+      (m.from == withUser and m.to == caller)
+    });
+    filtered.sort(func(a : Message, b : Message) : Order.Order {
+      Int.compare(a.createdAt, b.createdAt)
+    });
   };
 };
