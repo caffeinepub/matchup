@@ -1,6 +1,12 @@
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -63,7 +69,18 @@ import {
   useUpdateMyProfile,
 } from "./hooks/useQueries";
 
-const SPORTS = ["Soccer", "Basketball", "Tennis", "Volleyball", "Badminton"];
+const SPORTS = [
+  "Soccer",
+  "Basketball",
+  "Tennis",
+  "Volleyball",
+  "Badminton",
+  "Swimming",
+  "Running",
+  "Cycling",
+  "Table Tennis",
+  "Futsal",
+];
 
 const SPORT_CONFIG: Record<
   string,
@@ -98,6 +115,36 @@ const SPORT_CONFIG: Record<
     emoji: "🏸",
     color: "#A855F7",
     flickrTag: "badminton",
+  },
+  Swimming: {
+    band: "sport-band-swimming",
+    emoji: "🏊",
+    color: "#06B6D4",
+    flickrTag: "swimming",
+  },
+  Running: {
+    band: "sport-band-running",
+    emoji: "🏃",
+    color: "#F59E0B",
+    flickrTag: "running",
+  },
+  Cycling: {
+    band: "sport-band-cycling",
+    emoji: "🚴",
+    color: "#10B981",
+    flickrTag: "cycling",
+  },
+  "Table Tennis": {
+    band: "sport-band-tabletennis",
+    emoji: "🏓",
+    color: "#EC4899",
+    flickrTag: "tabletennis",
+  },
+  Futsal: {
+    band: "sport-band-futsal",
+    emoji: "🥅",
+    color: "#8B5CF6",
+    flickrTag: "futsal",
   },
 };
 
@@ -773,11 +820,124 @@ function Header({
 }
 
 // ---- HERO ----
+
+const SPORT_DESCRIPTIONS: Record<string, string> = {
+  Soccer:
+    "Môn thể thao vua với 11 người mỗi đội, kết hợp kỹ thuật cá nhân và teamwork.",
+  Basketball: "Môn bóng rổ nhanh, cần phối hợp đồng đội và kỹ năng ném bóng.",
+  Tennis:
+    "Môn thể thao đối kháng cá nhân hoặc đôi, đòi hỏi sức bền và kỹ thuật.",
+  Volleyball:
+    "Môn bóng chuyền cần teamwork và phản xạ tốt, phổ biến trong sinh viên.",
+  Badminton: "Cầu lông nhẹ nhàng nhưng đầy tốc độ, phù hợp mọi lứa tuổi.",
+  Swimming: "Bơi lội rèn luyện toàn thân, an toàn và hiệu quả cho sức khỏe.",
+  Running: "Chạy bộ đơn giản nhưng hiệu quả cao, nâng cao sức bền và tim mạch.",
+  Cycling: "Đạp xe kết hợp thể thao và khám phá, thân thiện với môi trường.",
+  "Table Tennis":
+    "Bóng bàn đòi hỏi phản xạ siêu nhanh và chiến thuật thông minh.",
+  Futsal: "Futsal sân nhỏ, nhịp độ cao, kỹ thuật tinh tế và cần phối hợp tốt.",
+};
+
+const SPORT_VIDEOS: Record<string, string> = {
+  Soccer: "https://www.youtube.com/embed/dLPFqRCMjZs",
+  Basketball: "https://www.youtube.com/embed/TlOqAjSfKaQ",
+  Tennis: "https://www.youtube.com/embed/Yme3kCHFHBo",
+  Volleyball: "https://www.youtube.com/embed/_ePtEMSTWxg",
+  Badminton: "https://www.youtube.com/embed/7Vq3Zy0bFPg",
+  Swimming: "https://www.youtube.com/embed/G64s5rGoQgM",
+  Running: "https://www.youtube.com/embed/A-eEHjJlQqE",
+  Cycling: "https://www.youtube.com/embed/YbCE_sCRJUQ",
+  "Table Tennis": "https://www.youtube.com/embed/GS35_bOBFX8",
+  Futsal: "https://www.youtube.com/embed/lXFBcJxRMBQ",
+};
+
+function SportDetailModal({
+  sport,
+  onClose,
+}: {
+  sport: string | null;
+  onClose: () => void;
+}) {
+  const cfg = sport ? getSportConfig(sport) : null;
+  const description = sport ? (SPORT_DESCRIPTIONS[sport] ?? "") : "";
+  const videoUrl = sport ? (SPORT_VIDEOS[sport] ?? "") : "";
+
+  return (
+    <Dialog
+      open={!!sport}
+      onOpenChange={(open) => {
+        if (!open) onClose();
+      }}
+    >
+      <DialogContent
+        className="max-w-2xl max-h-[90vh] overflow-y-auto p-0"
+        data-ocid="sport_detail.modal"
+      >
+        {sport && cfg && (
+          <>
+            <DialogHeader className="px-6 pt-6 pb-2">
+              <DialogTitle className="flex items-center gap-3 text-2xl font-bold">
+                <span className="text-4xl">{cfg.emoji}</span>
+                <span style={{ color: cfg.color }}>{sport}</span>
+              </DialogTitle>
+              <p className="text-muted-foreground text-sm mt-1">
+                {description}
+              </p>
+            </DialogHeader>
+
+            <div className="px-6 pb-4 space-y-5">
+              {/* Images grid */}
+              <div className="grid grid-cols-3 gap-2">
+                {[1, 2, 3].map((lock) => (
+                  <div
+                    key={lock}
+                    className="rounded-xl overflow-hidden aspect-square bg-muted"
+                  >
+                    <img
+                      src={`https://loremflickr.com/400/400/${cfg.flickrTag}?lock=${lock}`}
+                      alt={`${sport} ${lock}`}
+                      loading="lazy"
+                      className="w-full h-full object-cover"
+                    />
+                  </div>
+                ))}
+              </div>
+
+              {/* YouTube video */}
+              {videoUrl && (
+                <div className="rounded-xl overflow-hidden aspect-video bg-black">
+                  <iframe
+                    src={videoUrl}
+                    title={`${sport} video`}
+                    className="w-full h-full"
+                    allowFullScreen
+                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                  />
+                </div>
+              )}
+
+              {/* CTA */}
+              <Button
+                data-ocid="sport_detail.primary_button"
+                className="w-full h-12 text-base font-semibold bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white rounded-xl"
+                onClick={onClose}
+              >
+                🏅 Tạo trận ngay
+              </Button>
+            </div>
+          </>
+        )}
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 function HeroSection({
   onSearch,
 }: { onSearch: (sport: string, location: string) => void }) {
   const [sport, setSport] = useState("all");
   const [location, setLocation] = useState("");
+  const [selectedSport, setSelectedSport] = useState<string | null>(null);
 
   function handleSearch() {
     onSearch(sport === "all" ? "" : sport, location);
@@ -835,25 +995,27 @@ function HeroSection({
           >
             <div className="grid grid-cols-3 gap-4">
               {Object.entries(SPORT_CONFIG).map(([name, cfg]) => (
-                <div
+                <button
                   key={name}
-                  className="w-28 h-28 rounded-2xl flex flex-col items-center justify-center bg-white/20 backdrop-blur-md border border-white/25 shadow-xl transition-all duration-300 hover:scale-[1.08] hover:bg-white/28"
+                  type="button"
+                  data-ocid="hero.sport_card"
+                  onClick={() => setSelectedSport(name)}
+                  className="w-28 h-28 rounded-2xl flex flex-col items-center justify-center bg-white/20 backdrop-blur-md border border-white/25 shadow-xl transition-all duration-300 hover:scale-[1.08] hover:bg-white/28 cursor-pointer focus:outline-none focus:ring-2 focus:ring-white/50"
                 >
                   <span className="text-3xl">{cfg.emoji}</span>
                   <span className="text-xs text-white/80 mt-1 font-medium">
                     {name}
                   </span>
-                </div>
+                </button>
               ))}
-              <div className="w-28 h-28 rounded-2xl flex flex-col items-center justify-center bg-white/20 backdrop-blur-md border border-white/25 shadow-xl transition-all duration-300 hover:scale-[1.08] hover:bg-white/28">
-                <span className="text-3xl">🎯</span>
-                <span className="text-xs text-white/80 mt-1 font-medium">
-                  More
-                </span>
-              </div>
             </div>
           </motion.div>
         </div>
+
+        <SportDetailModal
+          sport={selectedSport}
+          onClose={() => setSelectedSport(null)}
+        />
 
         {/* Search panel */}
         <motion.div
