@@ -21,8 +21,10 @@ import {
 import { Toaster } from "@/components/ui/sonner";
 import { Textarea } from "@/components/ui/textarea";
 import {
+  Bell,
   Calendar,
   Clock,
+  Filter,
   Heart,
   Loader2,
   LogIn,
@@ -45,13 +47,14 @@ import {
 import { AnimatePresence, motion } from "motion/react";
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
-import type { Match, MatchEntry, Message, ProfileEntry } from "./backend.d";
+import { ChatSection } from "./ChatSection";
+import type { Match, MatchEntry, ProfileEntry } from "./backend.d";
 import { useInternetIdentity } from "./hooks/useInternetIdentity";
+import { type Notification, useNotifications } from "./hooks/useNotifications";
 import {
   useCreateMatch,
   useGetAllMatches,
   useGetAllProfiles,
-  useGetMessages,
   useGetMyMatches,
   useGetMyProfile,
   useJoinMatch,
@@ -289,7 +292,7 @@ function ProfileSheet({
             data-ocid="profile.panel"
             initial={{ opacity: 0, x: 10 }}
             animate={{ opacity: 1, x: 0 }}
-            transition={{ duration: 0.2 }}
+            transition={{ type: "spring", stiffness: 400, damping: 30 }}
             className="space-y-5"
           >
             <div className="space-y-2">
@@ -394,7 +397,7 @@ function ProfileSheet({
           >
             {/* Avatar + Name */}
             <div className="flex flex-col items-center gap-4 py-4">
-              <Avatar className="w-24 h-24 border-4 border-border shadow-lg">
+              <Avatar className="w-28 h-28 border-4 border-border shadow-xl">
                 {profile?.avatarUrl ? (
                   <AvatarImage src={profile.avatarUrl} alt={displayName} />
                 ) : null}
@@ -478,17 +481,156 @@ function ProfileSheet({
   );
 }
 
+// ---- NOTIFICATION BELL ----
+function NotificationBell({
+  notifications,
+  unreadCount,
+  markAllRead,
+  clearAll,
+}: {
+  notifications: Notification[];
+  unreadCount: number;
+  markAllRead: () => void;
+  clearAll: () => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    function handleOutside(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) {
+        setOpen(false);
+      }
+    }
+    if (open) document.addEventListener("mousedown", handleOutside);
+    return () => document.removeEventListener("mousedown", handleOutside);
+  }, [open]);
+
+  function formatTime(ts: number) {
+    const diff = Date.now() - ts;
+    if (diff < 60000) return "Vừa xong";
+    if (diff < 3600000) return `${Math.floor(diff / 60000)} phút trước`;
+    if (diff < 86400000) return `${Math.floor(diff / 3600000)} giờ trước`;
+    return new Date(ts).toLocaleDateString("vi-VN");
+  }
+
+  return (
+    <div ref={ref} className="relative">
+      <Button
+        variant="ghost"
+        size="icon"
+        onClick={() => setOpen((v) => !v)}
+        data-ocid="header.notification_button"
+        className="rounded-full cursor-pointer transition-all duration-200 hover:scale-[1.03] active:scale-[0.97] relative"
+        aria-label="Thông báo"
+      >
+        <Bell className="w-4 h-4" />
+        {unreadCount > 0 && (
+          <span
+            className="absolute -top-1 -right-1 min-w-[18px] h-[18px] rounded-full bg-red-500 text-white text-[10px] font-bold flex items-center justify-center px-1"
+            data-ocid="header.notification_badge"
+          >
+            {unreadCount > 99 ? "99+" : unreadCount}
+          </span>
+        )}
+      </Button>
+      <AnimatePresence>
+        {open && (
+          <motion.div
+            data-ocid="header.notification_panel"
+            initial={{ opacity: 0, y: -8 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -8 }}
+            transition={{ duration: 0.18 }}
+            className="absolute right-0 top-full mt-2 z-50 min-w-72 w-80 rounded-xl border border-border bg-popover shadow-2xl overflow-hidden"
+          >
+            <div className="flex items-center justify-between px-4 py-3 border-b border-border">
+              <span className="font-semibold text-sm">Thông báo</span>
+              <div className="flex gap-2">
+                {notifications.length > 0 && (
+                  <>
+                    <button
+                      type="button"
+                      onClick={markAllRead}
+                      data-ocid="header.notification_mark_read"
+                      className="text-xs text-blue-500 hover:underline cursor-pointer"
+                    >
+                      Đánh dấu đã đọc
+                    </button>
+                    <button
+                      type="button"
+                      onClick={clearAll}
+                      data-ocid="header.notification_clear"
+                      className="text-xs text-muted-foreground hover:underline cursor-pointer"
+                    >
+                      Xóa tất cả
+                    </button>
+                  </>
+                )}
+              </div>
+            </div>
+            <div className="max-h-80 overflow-y-auto divide-y divide-border">
+              {notifications.length === 0 ? (
+                <div
+                  data-ocid="header.notification_empty_state"
+                  className="py-8 text-center text-sm text-muted-foreground"
+                >
+                  Chưa có thông báo nào
+                </div>
+              ) : (
+                notifications.map((n, i) => (
+                  <div
+                    key={n.id}
+                    data-ocid={`header.notification.item.${i + 1}`}
+                    className={`px-4 py-3 text-sm transition-colors ${
+                      n.read
+                        ? "bg-transparent"
+                        : "bg-blue-50/60 dark:bg-blue-950/20 border-l-2 border-l-blue-400"
+                    }`}
+                  >
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="flex-1 min-w-0">
+                        <p className="font-medium text-foreground truncate">
+                          {n.title}
+                        </p>
+                        <p className="text-muted-foreground text-xs mt-0.5 leading-relaxed">
+                          {n.body}
+                        </p>
+                      </div>
+                      <span className="text-[10px] text-muted-foreground whitespace-nowrap mt-0.5 shrink-0">
+                        {formatTime(n.createdAt)}
+                      </span>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+}
+
 // ---- HEADER ----
 function Header({
   onCreateClick,
   onProfileClick,
   isDark,
   toggleDark,
+  notifications,
+  unreadCount,
+  markAllRead,
+  clearAll,
 }: {
   onCreateClick: () => void;
   onProfileClick: () => void;
   isDark: boolean;
   toggleDark: () => void;
+  notifications: Notification[];
+  unreadCount: number;
+  markAllRead: () => void;
+  clearAll: () => void;
 }) {
   const { login, clear, loginStatus, identity } = useInternetIdentity();
   const isLoggedIn = loginStatus === "success" && !!identity;
@@ -515,9 +657,9 @@ function Header({
   };
 
   return (
-    <header className="sticky top-0 z-50 bg-white/95 dark:bg-background/95 backdrop-blur border-b border-border shadow-xs transition-colors duration-300">
+    <header className="sticky top-0 z-50 bg-white dark:bg-background border-b border-border shadow-xs transition-colors duration-300">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex items-center justify-between h-16">
+        <div className="flex items-center justify-between h-[72px]">
           {/* Logo */}
           <div className="flex items-center gap-2">
             <div
@@ -529,7 +671,7 @@ function Header({
             >
               <Trophy className="w-5 h-5 text-white" />
             </div>
-            <span className="text-2xl font-bold text-foreground tracking-tight">
+            <span className="text-2xl font-bold tracking-tight brand-gradient-text">
               MatchUp
             </span>
           </div>
@@ -571,6 +713,12 @@ function Header({
                   <Moon className="w-4 h-4" />
                 )}
               </Button>
+              <NotificationBell
+                notifications={notifications}
+                unreadCount={unreadCount}
+                markAllRead={markAllRead}
+                clearAll={clearAll}
+              />
               {isLoggedIn ? (
                 <>
                   <span className="hidden sm:block text-xs text-muted-foreground truncate max-w-[100px]">
@@ -647,7 +795,7 @@ function HeroSection({
         }}
       />
 
-      <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-20 lg:py-28">
+      <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-24 lg:py-32">
         <div className="grid lg:grid-cols-2 gap-12 items-center">
           <motion.div
             initial={{ opacity: 0, y: 30 }}
@@ -657,7 +805,7 @@ function HeroSection({
             <Badge className="mb-4 bg-white/20 text-white border-white/30 backdrop-blur-sm">
               <Zap className="w-3 h-3 mr-1" /> Live Matchmaking
             </Badge>
-            <h1 className="font-display text-5xl lg:text-7xl font-extrabold text-white leading-tight mb-4">
+            <h1 className="font-display text-6xl lg:text-8xl font-extrabold text-white leading-tight mb-4">
               Tìm đồng đội,{" "}
               <span className="text-yellow-300">Ra sân thôi!</span>
             </h1>
@@ -689,7 +837,7 @@ function HeroSection({
               {Object.entries(SPORT_CONFIG).map(([name, cfg]) => (
                 <div
                   key={name}
-                  className="w-24 h-24 rounded-2xl flex flex-col items-center justify-center bg-white/15 backdrop-blur border border-white/20 shadow-lg transition-all duration-200 hover:scale-[1.05] hover:bg-white/20"
+                  className="w-28 h-28 rounded-2xl flex flex-col items-center justify-center bg-white/20 backdrop-blur-md border border-white/25 shadow-xl transition-all duration-300 hover:scale-[1.08] hover:bg-white/28"
                 >
                   <span className="text-3xl">{cfg.emoji}</span>
                   <span className="text-xs text-white/80 mt-1 font-medium">
@@ -697,7 +845,7 @@ function HeroSection({
                   </span>
                 </div>
               ))}
-              <div className="w-24 h-24 rounded-2xl flex flex-col items-center justify-center bg-white/15 backdrop-blur border border-white/20 shadow-lg transition-all duration-200 hover:scale-[1.05] hover:bg-white/20">
+              <div className="w-28 h-28 rounded-2xl flex flex-col items-center justify-center bg-white/20 backdrop-blur-md border border-white/25 shadow-xl transition-all duration-300 hover:scale-[1.08] hover:bg-white/28">
                 <span className="text-3xl">🎯</span>
                 <span className="text-xs text-white/80 mt-1 font-medium">
                   More
@@ -709,7 +857,7 @@ function HeroSection({
 
         {/* Search panel */}
         <motion.div
-          className="mt-10 bg-foreground/95 backdrop-blur rounded-2xl p-6 shadow-hero max-w-2xl"
+          className="mt-10 bg-black/40 backdrop-blur-xl rounded-2xl p-6 shadow-2xl max-w-2xl border border-white/10"
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.5, delay: 0.4 }}
@@ -747,7 +895,7 @@ function HeroSection({
               className="text-white font-semibold px-6 shrink-0 border-0 min-h-[48px] rounded-full cursor-pointer transition-all duration-200 hover:scale-[1.03] active:scale-[0.97]"
               style={{
                 background:
-                  "linear-gradient(135deg, oklch(0.72 0.18 47), oklch(0.80 0.18 80))",
+                  "linear-gradient(135deg, oklch(0.72 0.2 47), oklch(0.82 0.2 80))",
               }}
             >
               <Search className="w-4 h-4 mr-2" /> Tìm ngay
@@ -782,11 +930,19 @@ function MatchCard({
   return (
     <motion.div
       data-ocid={`matches.item.${index + 1}`}
-      className="group match-card-img relative rounded-2xl overflow-hidden cursor-pointer"
+      className="group match-card-img relative rounded-3xl overflow-hidden cursor-pointer"
       style={{ minHeight: "280px" }}
       initial={{ opacity: 0, y: 16 }}
       animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.4, delay: index * 0.07 }}
+      transition={{
+        duration: 0.4,
+        delay: index * 0.07,
+        type: "spring",
+        stiffness: 300,
+        damping: 25,
+      }}
+      whileHover={{ y: -4 }}
+      whileTap={{ scale: 0.97 }}
     >
       {/* Background image */}
       <img
@@ -797,7 +953,7 @@ function MatchCard({
       />
 
       {/* Dark gradient overlay */}
-      <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/40 to-black/10" />
+      <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/50 to-transparent" />
 
       {/* NEW badge */}
       {isNewest && (
@@ -817,7 +973,7 @@ function MatchCard({
 
       {/* Card content overlaid on image */}
       <div
-        className="absolute inset-x-0 bottom-0 p-5 glass-card rounded-b-2xl"
+        className="absolute inset-x-0 bottom-0 p-6 glass-card rounded-b-3xl"
         style={{ borderTop: `2px solid ${cfg.color}` }}
       >
         <h3 className="font-bold text-white text-base mb-2 line-clamp-1">
@@ -910,15 +1066,44 @@ function SportRanking({ matches }: { matches: Match[] }) {
   );
 }
 
-// ---- FIND PLAYERS SECTION ----
-function FindPlayersSection({
+// ---- MATCH REASON HELPER ----
+function getMatchReasons(mySkills: string[], theirSkills: string[]): string {
+  const mine = mySkills.map((s) => s.trim().toLowerCase());
+  const theirs = theirSkills.map((s) => s.trim().toLowerCase());
+  const shared = mine.filter((s) => theirs.includes(s));
+  if (shared.length === 0) return "Expand your network";
+  const capitalize = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
+  if (shared.length === 1) return `You both like ${capitalize(shared[0])}`;
+  return `Shared: ${shared.slice(0, 2).map(capitalize).join(", ")}`;
+}
+
+// ---- MATCH PERCENT HELPER ----
+function calculateMatchPercent(
+  mySkills: string[],
+  theirSkills: string[],
+): number {
+  if (mySkills.length === 0 && theirSkills.length === 0) return 50;
+  const mine = mySkills.map((s) => s.trim().toLowerCase());
+  const theirs = theirSkills.map((s) => s.trim().toLowerCase());
+  const shared = mine.filter((s) => theirs.includes(s));
+  const total = new Set([...mine, ...theirs]).size;
+  if (total === 0) return 50;
+  const base = Math.round((shared.length / total) * 100);
+  // Scale to 30-99 range to feel realistic
+  return Math.max(30, Math.min(99, base + 30));
+}
+
+// ---- TODAY'S MATCHES SECTION ----
+function TodayMatchesSection({
   identity,
 }: { identity: { getPrincipal: () => { toString: () => string } } }) {
   const callerPrincipal = identity.getPrincipal().toString();
   const { data: profiles = [], isLoading } = useGetAllProfiles(true);
+  const { data: myProfile } = useGetMyProfile(true);
   const { data: myMatches = [] } = useGetMyMatches(true);
   const matchMutation = useMatchWithUser();
 
+  const mySkills = myProfile?.skills ?? [];
   const matchedSet = new Set(
     myMatches.map((m: MatchEntry) => m.matched.toString()),
   );
@@ -928,9 +1113,24 @@ function FindPlayersSection({
       .map((m: MatchEntry) => m.matched.toString()),
   );
 
+  // Seed daily picks using today's date string so they refresh each day
+  const todayStr = new Date().toISOString().slice(0, 10);
   const others = profiles.filter(
     (p: ProfileEntry) => p.owner.toString() !== callerPrincipal,
   );
+  const dailySuggestions = (() => {
+    if (others.length === 0) return [];
+    // Simple deterministic shuffle with date seed
+    const seed = todayStr
+      .split("")
+      .reduce((acc, c) => acc + c.charCodeAt(0), 0);
+    const shuffled = [...others].sort((a, b) => {
+      const ha = (a.owner.toString().charCodeAt(0) * seed) % 997;
+      const hb = (b.owner.toString().charCodeAt(0) * seed) % 997;
+      return ha - hb;
+    });
+    return shuffled.slice(0, 3);
+  })();
 
   function getInitials(name: string) {
     return (
@@ -945,51 +1145,63 @@ function FindPlayersSection({
 
   return (
     <section className="py-10 px-4 max-w-7xl mx-auto">
-      <h2 className="text-2xl font-bold mb-6 text-foreground flex items-center gap-2">
-        <span>🏃</span> Find Players
-      </h2>
+      <div className="flex items-center gap-3 mb-6">
+        <h2 className="text-2xl font-bold text-foreground flex items-center gap-2">
+          <span>✨</span> Today's Matches
+        </h2>
+        <Badge variant="secondary" className="text-xs font-medium">
+          {todayStr}
+        </Badge>
+      </div>
 
       {isLoading ? (
-        <div
-          data-ocid="players.loading_state"
-          className="flex gap-4 overflow-x-auto pb-2"
-        >
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
           {[1, 2, 3].map((i) => (
-            <div
-              key={i}
-              className="flex-shrink-0 w-56 h-48 rounded-2xl bg-muted animate-pulse"
-            />
+            <div key={i} className="h-44 rounded-2xl bg-muted animate-pulse" />
           ))}
         </div>
-      ) : others.length === 0 ? (
-        <div
-          data-ocid="players.empty_state"
-          className="text-center py-12 text-muted-foreground"
-        >
-          <p className="text-lg">No players found yet.</p>
-          <p className="text-sm mt-1">Set up your profile to appear here!</p>
+      ) : dailySuggestions.length === 0 ? (
+        <div className="text-center py-12 text-muted-foreground">
+          <p className="text-lg">No suggestions yet.</p>
+          <p className="text-sm mt-1">
+            More players will appear as others join!
+          </p>
         </div>
       ) : (
-        <div className="flex gap-4 overflow-x-auto pb-3 snap-x snap-mandatory">
-          {others.map((entry: ProfileEntry, idx: number) => {
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          {dailySuggestions.map((entry: ProfileEntry) => {
             const ownerStr = entry.owner.toString();
             const isMatched = matchedSet.has(ownerStr);
             const isMutual = mutualSet.has(ownerStr);
             const isPending =
               matchMutation.isPending &&
               matchMutation.variables?.toString() === ownerStr;
+            const pct = calculateMatchPercent(mySkills, entry.profile.skills);
+            const reason = getMatchReasons(mySkills, entry.profile.skills);
+            const pctColor =
+              pct >= 70
+                ? "bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 border-emerald-500/30"
+                : pct >= 50
+                  ? "bg-blue-500/20 text-blue-600 dark:text-blue-400 border-blue-500/30"
+                  : "bg-muted text-muted-foreground";
 
             return (
               <div
                 key={ownerStr}
-                data-ocid={`players.item.${idx + 1}`}
-                className="flex-shrink-0 w-56 snap-start rounded-2xl border border-border bg-card/80 backdrop-blur-sm p-4 flex flex-col gap-3 shadow-sm hover:shadow-md transition-shadow"
+                className="rounded-2xl border border-border bg-gradient-to-br from-card to-card/70 backdrop-blur-sm p-5 flex flex-col gap-3 card-hover-glow"
               >
-                {isMutual && (
-                  <Badge className="self-start bg-green-500/20 text-green-600 dark:text-green-400 border-green-500/30 text-xs">
-                    🤝 Mutual
+                <div className="flex items-center justify-between">
+                  {isMutual ? (
+                    <Badge className="bg-green-500/20 text-green-600 dark:text-green-400 border-green-500/30 text-xs">
+                      🤝 Mutual
+                    </Badge>
+                  ) : (
+                    <span />
+                  )}
+                  <Badge className={`text-xs font-bold ${pctColor}`}>
+                    {pct}% match
                   </Badge>
-                )}
+                </div>
                 <div className="flex items-center gap-3">
                   <Avatar className="h-12 w-12">
                     {entry.profile.avatarUrl ? (
@@ -1024,6 +1236,275 @@ function FindPlayersSection({
                     ))}
                   </div>
                 )}
+                <p className="text-xs font-medium flex items-center gap-1 bg-primary/10 text-primary rounded-md px-2 py-0.5">
+                  <span>💡</span> {reason}
+                </p>
+                <Button
+                  size="sm"
+                  variant={isMatched ? "outline" : "default"}
+                  disabled={isMatched || isPending}
+                  className={
+                    isMatched
+                      ? "text-green-600 dark:text-green-400 border-green-500/40"
+                      : ""
+                  }
+                  onClick={() => matchMutation.mutate(entry.owner)}
+                >
+                  {isPending
+                    ? "Matching…"
+                    : isMatched
+                      ? "✓ Matched!"
+                      : "Match ✓"}
+                </Button>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </section>
+  );
+}
+
+// ---- FIND PLAYERS SECTION ----
+function FindPlayersSection({
+  identity,
+}: { identity: { getPrincipal: () => { toString: () => string } } }) {
+  const callerPrincipal = identity.getPrincipal().toString();
+  const { data: profiles = [], isLoading } = useGetAllProfiles(true);
+  const { data: myMatches = [] } = useGetMyMatches(true);
+  const { data: myProfile } = useGetMyProfile(true);
+  const mySkills = myProfile?.skills ?? [];
+  const matchMutation = useMatchWithUser();
+
+  const matchedSet = new Set(
+    myMatches.map((m: MatchEntry) => m.matched.toString()),
+  );
+  const mutualSet = new Set(
+    myMatches
+      .filter((m: MatchEntry) => m.mutual)
+      .map((m: MatchEntry) => m.matched.toString()),
+  );
+
+  const [filterSkills, setFilterSkills] = useState<string[]>([]);
+
+  const others = profiles.filter(
+    (p: ProfileEntry) => p.owner.toString() !== callerPrincipal,
+  );
+
+  const allSkills: string[] = (
+    [
+      ...new Set(profiles.flatMap((p: ProfileEntry) => p.profile.skills)),
+    ] as string[]
+  ).sort();
+
+  const filtered =
+    filterSkills.length === 0
+      ? others
+      : others.filter((p: ProfileEntry) =>
+          p.profile.skills.some((s) => filterSkills.includes(s)),
+        );
+
+  function toggleSkill(skill: string) {
+    setFilterSkills((prev) =>
+      prev.includes(skill) ? prev.filter((s) => s !== skill) : [...prev, skill],
+    );
+  }
+
+  function getInitials(name: string) {
+    return (
+      name
+        .split(" ")
+        .map((n) => n[0])
+        .join("")
+        .slice(0, 2)
+        .toUpperCase() || "?"
+    );
+  }
+
+  return (
+    <section className="py-10 px-4 max-w-7xl mx-auto">
+      <h2 className="text-3xl font-bold tracking-tight mb-6 text-foreground flex items-center gap-2">
+        <span>🏃</span> Find Players
+      </h2>
+
+      {allSkills.length > 0 && (
+        <div className="mb-6 space-y-3">
+          <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
+            <Filter className="h-4 w-4" />
+            <span>Filter by Skills / Interests:</span>
+          </div>
+          <div className="flex flex-wrap gap-2" data-ocid="players.tab">
+            {allSkills.map((skill) => (
+              <Badge
+                key={skill}
+                variant={filterSkills.includes(skill) ? "default" : "outline"}
+                className="cursor-pointer select-none hover:opacity-80 transition-opacity"
+                onClick={() => toggleSkill(skill)}
+                data-ocid="players.toggle"
+              >
+                {skill}
+              </Badge>
+            ))}
+            <Badge
+              variant="outline"
+              className="cursor-not-allowed opacity-40 select-none"
+              title="Goals field is not available yet"
+            >
+              Goals (coming soon)
+            </Badge>
+          </div>
+          {filterSkills.length > 0 && (
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-xs text-muted-foreground">Active:</span>
+              {filterSkills.map((skill) => (
+                <Badge
+                  key={skill}
+                  variant="secondary"
+                  className="flex items-center gap-1 cursor-pointer"
+                  onClick={() => toggleSkill(skill)}
+                >
+                  {skill}
+                  <X className="h-3 w-3" />
+                </Badge>
+              ))}
+              <button
+                type="button"
+                className="text-xs text-primary hover:underline ml-1"
+                onClick={() => setFilterSkills([])}
+                data-ocid="players.secondary_button"
+              >
+                Clear all
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+
+      {isLoading ? (
+        <div
+          data-ocid="players.loading_state"
+          className="flex gap-4 overflow-x-auto pb-2"
+        >
+          {[1, 2, 3].map((i) => (
+            <div
+              key={i}
+              className="flex-shrink-0 w-56 h-48 rounded-2xl bg-muted animate-pulse"
+            />
+          ))}
+        </div>
+      ) : others.length === 0 ? (
+        <div
+          data-ocid="players.empty_state"
+          className="text-center py-12 text-muted-foreground"
+        >
+          <p className="text-lg">No players found yet.</p>
+          <p className="text-sm mt-1">Set up your profile to appear here!</p>
+        </div>
+      ) : filtered.length === 0 ? (
+        <div
+          data-ocid="players.empty_state"
+          className="text-center py-12 text-muted-foreground"
+        >
+          <p className="text-lg">No players match your filters.</p>
+          <button
+            type="button"
+            className="text-sm text-primary hover:underline mt-2"
+            onClick={() => setFilterSkills([])}
+            data-ocid="players.secondary_button"
+          >
+            Clear filters
+          </button>
+        </div>
+      ) : (
+        <div className="flex gap-4 overflow-x-auto pb-3 snap-x snap-mandatory">
+          {filtered.map((entry: ProfileEntry, idx: number) => {
+            const ownerStr = entry.owner.toString();
+            const isMatched = matchedSet.has(ownerStr);
+            const isMutual = mutualSet.has(ownerStr);
+            const isPending =
+              matchMutation.isPending &&
+              matchMutation.variables?.toString() === ownerStr;
+
+            return (
+              <div
+                key={ownerStr}
+                data-ocid={`players.item.${idx + 1}`}
+                className="flex-shrink-0 w-56 snap-start rounded-2xl border border-border bg-gradient-to-br from-card to-card/70 backdrop-blur-sm p-4 flex flex-col gap-3 card-hover-glow"
+              >
+                <div className="flex items-center gap-2">
+                  {isMutual && (
+                    <Badge className="bg-green-500/20 text-green-600 dark:text-green-400 border-green-500/30 text-xs">
+                      🤝 Mutual
+                    </Badge>
+                  )}
+                  {(() => {
+                    const pct = calculateMatchPercent(
+                      mySkills,
+                      entry.profile.skills,
+                    );
+                    const color =
+                      pct >= 70
+                        ? "bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 border-emerald-500/30"
+                        : pct >= 50
+                          ? "bg-blue-500/20 text-blue-600 dark:text-blue-400 border-blue-500/30"
+                          : "bg-muted text-muted-foreground";
+                    return (
+                      <Badge className={`ml-auto text-xs font-bold ${color}`}>
+                        {pct}% match
+                      </Badge>
+                    );
+                  })()}
+                </div>
+                <div className="flex items-center gap-3">
+                  <Avatar className="h-12 w-12">
+                    {entry.profile.avatarUrl ? (
+                      <AvatarImage
+                        src={entry.profile.avatarUrl}
+                        alt={entry.profile.name}
+                      />
+                    ) : null}
+                    <AvatarFallback className="bg-primary/20 text-primary font-semibold">
+                      {getInitials(entry.profile.name || ownerStr)}
+                    </AvatarFallback>
+                  </Avatar>
+                  <div className="flex-1 min-w-0">
+                    <p className="font-semibold text-sm text-foreground truncate">
+                      {entry.profile.name || "Anonymous"}
+                    </p>
+                    <p className="text-xs text-muted-foreground line-clamp-2 mt-0.5">
+                      {entry.profile.bio || "No bio yet"}
+                    </p>
+                  </div>
+                </div>
+                {entry.profile.skills.length > 0 && (
+                  <div className="flex flex-wrap gap-1">
+                    {entry.profile.skills.slice(0, 3).map((skill) => (
+                      <Badge
+                        key={skill}
+                        variant="secondary"
+                        className="text-xs px-2 py-0"
+                      >
+                        {skill}
+                      </Badge>
+                    ))}
+                  </div>
+                )}
+                {(() => {
+                  const reason = getMatchReasons(
+                    mySkills,
+                    entry.profile.skills,
+                  );
+                  const isShared =
+                    reason.startsWith("You both like") ||
+                    reason.startsWith("Shared:");
+                  return (
+                    <p
+                      className={`text-xs font-medium flex items-center gap-1 ${isShared ? "bg-primary/10 text-primary rounded-md px-2 py-0.5" : "text-muted-foreground"}`}
+                    >
+                      <span>💡</span> {reason}
+                    </p>
+                  );
+                })()}
                 <Button
                   data-ocid={`players.button.${idx + 1}`}
                   size="sm"
@@ -1110,7 +1591,7 @@ function LiveMatchesSection({
       {isLoading ? (
         <div
           data-ocid="matches.loading_state"
-          className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5"
+          className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6"
         >
           {Array.from({ length: 8 }, (_, i) => i).map((i) => (
             <SkeletonCard key={`skeleton-${i}`} />
@@ -1127,7 +1608,7 @@ function LiveMatchesSection({
           </p>
         </div>
       ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
           <AnimatePresence>
             {filtered.map((match, i) => (
               <MatchCard
@@ -1343,7 +1824,10 @@ function CreateMatchSection({
               data-ocid="create.submit_button"
               disabled={isSubmitting}
               className="w-full mt-8 h-12 text-base font-bold text-white border-0 rounded-full cursor-pointer transition-all duration-200 hover:scale-[1.02] active:scale-[0.98]"
-              style={{ background: "oklch(0.18 0.03 220)" }}
+              style={{
+                background:
+                  "linear-gradient(135deg, oklch(0.52 0.22 260), oklch(0.65 0.14 188))",
+              }}
             >
               {isSubmitting ? (
                 <>
@@ -1455,7 +1939,7 @@ function Footer() {
 // ---- MOBILE STICKY BOTTOM BAR ----
 function MobileStickyBar({ onCreateClick }: { onCreateClick: () => void }) {
   return (
-    <div className="sm:hidden fixed bottom-0 left-0 right-0 z-40 px-4 pb-safe-area-inset-bottom bg-white/95 dark:bg-background/95 backdrop-blur border-t border-border dark:border-border py-3 transition-colors duration-300">
+    <div className="sm:hidden fixed bottom-0 left-0 right-0 z-40 px-4 pb-safe-area-inset-bottom bg-white dark:bg-background border-t border-border dark:border-border py-3 transition-colors duration-300">
       <Button
         data-ocid="mobile.create_button"
         onClick={onCreateClick}
@@ -1471,206 +1955,6 @@ function MobileStickyBar({ onCreateClick }: { onCreateClick: () => void }) {
   );
 }
 
-// ---- CHAT SECTION ----
-function ChatSection({
-  identity,
-}: { identity: { getPrincipal: () => { toString: () => string } } }) {
-  const callerPrincipal = identity.getPrincipal().toString();
-  const { data: myMatches = [] } = useGetMyMatches(true);
-  const [selectedContact, setSelectedContact] = useState<MatchEntry | null>(
-    null,
-  );
-  const [text, setText] = useState("");
-  const scrollRef = useRef<HTMLDivElement>(null);
-
-  const mutualMatches = myMatches.filter((m: MatchEntry) => m.mutual);
-
-  const { data: messages = [], isLoading: loadingMessages } = useGetMessages(
-    selectedContact?.matched ?? null,
-    !!selectedContact,
-  );
-  const sendMutation = useSendMessage();
-
-  const messagesLen = messages.length;
-  // biome-ignore lint/correctness/useExhaustiveDependencies: scroll on message count change
-  useEffect(() => {
-    if (scrollRef.current) {
-      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
-    }
-  }, [messagesLen]);
-
-  function getInitials(name: string) {
-    return (
-      name
-        .split(" ")
-        .map((n) => n[0])
-        .join("")
-        .slice(0, 2)
-        .toUpperCase() || "?"
-    );
-  }
-
-  function handleSend() {
-    if (!text.trim() || !selectedContact) return;
-    sendMutation.mutate(
-      { to: selectedContact.matched, text: text.trim() },
-      { onSuccess: () => setText("") },
-    );
-  }
-
-  function handleKeyDown(e: import("react").KeyboardEvent<HTMLInputElement>) {
-    if (e.key === "Enter" && !e.shiftKey) {
-      e.preventDefault();
-      handleSend();
-    }
-  }
-
-  return (
-    <section className="py-10 px-4 max-w-7xl mx-auto">
-      <h2 className="text-2xl font-bold mb-6 text-foreground flex items-center gap-2">
-        <span>💬</span> Tin nhắn
-      </h2>
-
-      {mutualMatches.length === 0 ? (
-        <div
-          data-ocid="chat.empty_state"
-          className="text-center py-12 text-muted-foreground border border-dashed border-border rounded-2xl"
-        >
-          <p className="text-lg">Chưa có kết nối nào.</p>
-          <p className="text-sm mt-1">
-            Kết nối với người chơi để bắt đầu nhắn tin!
-          </p>
-        </div>
-      ) : (
-        <div className="flex gap-4 h-[420px] border border-border rounded-2xl overflow-hidden bg-card/60 backdrop-blur-sm shadow-sm">
-          {/* Contact list */}
-          <div className="w-56 flex-shrink-0 border-r border-border overflow-y-auto">
-            {mutualMatches.map((m: MatchEntry, idx: number) => {
-              const isSelected =
-                selectedContact?.matched.toString() === m.matched.toString();
-              return (
-                <button
-                  type="button"
-                  key={m.matched.toString()}
-                  data-ocid={`chat.item.${idx + 1}`}
-                  onClick={() => setSelectedContact(m)}
-                  className={`w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-muted/60 transition-colors ${isSelected ? "bg-primary/10 border-r-2 border-primary" : ""}`}
-                >
-                  <Avatar className="h-9 w-9 flex-shrink-0">
-                    {m.profile.avatarUrl ? (
-                      <AvatarImage
-                        src={m.profile.avatarUrl}
-                        alt={m.profile.name}
-                      />
-                    ) : null}
-                    <AvatarFallback className="bg-primary/20 text-primary text-xs font-semibold">
-                      {getInitials(m.profile.name || m.matched.toString())}
-                    </AvatarFallback>
-                  </Avatar>
-                  <span className="text-sm font-medium truncate text-foreground">
-                    {m.profile.name || `${m.matched.toString().slice(0, 8)}...`}
-                  </span>
-                </button>
-              );
-            })}
-          </div>
-
-          {/* Message thread */}
-          {selectedContact ? (
-            <div className="flex-1 flex flex-col min-w-0">
-              <div className="px-4 py-3 border-b border-border flex items-center gap-3 bg-muted/30">
-                <Avatar className="h-8 w-8">
-                  {selectedContact.profile.avatarUrl ? (
-                    <AvatarImage
-                      src={selectedContact.profile.avatarUrl}
-                      alt={selectedContact.profile.name}
-                    />
-                  ) : null}
-                  <AvatarFallback className="bg-primary/20 text-primary text-xs font-semibold">
-                    {getInitials(
-                      selectedContact.profile.name ||
-                        selectedContact.matched.toString(),
-                    )}
-                  </AvatarFallback>
-                </Avatar>
-                <span className="font-semibold text-sm text-foreground">
-                  {selectedContact.profile.name ||
-                    `${selectedContact.matched.toString().slice(0, 10)}...`}
-                </span>
-              </div>
-
-              <div
-                ref={scrollRef}
-                data-ocid="chat.panel"
-                className="flex-1 overflow-y-auto px-4 py-3 flex flex-col gap-2"
-              >
-                {loadingMessages ? (
-                  <div
-                    data-ocid="chat.loading_state"
-                    className="flex items-center justify-center h-full text-muted-foreground text-sm"
-                  >
-                    Đang tải...
-                  </div>
-                ) : messages.length === 0 ? (
-                  <div
-                    data-ocid="chat.empty_state"
-                    className="flex items-center justify-center h-full text-muted-foreground text-sm"
-                  >
-                    Hãy bắt đầu cuộc trò chuyện!
-                  </div>
-                ) : (
-                  messages.map((msg: Message) => {
-                    const isMine = msg.from.toString() === callerPrincipal;
-                    return (
-                      <div
-                        key={msg.id}
-                        className={`flex ${isMine ? "justify-end" : "justify-start"}`}
-                      >
-                        <div
-                          className={`max-w-[70%] px-3 py-2 rounded-2xl text-sm ${
-                            isMine
-                              ? "bg-primary text-primary-foreground rounded-br-sm"
-                              : "bg-muted text-foreground rounded-bl-sm"
-                          }`}
-                        >
-                          {msg.text}
-                        </div>
-                      </div>
-                    );
-                  })
-                )}
-              </div>
-
-              <div className="px-4 py-3 border-t border-border flex gap-2">
-                <Input
-                  data-ocid="chat.input"
-                  value={text}
-                  onChange={(e) => setText(e.target.value)}
-                  onKeyDown={handleKeyDown}
-                  placeholder="Nhập tin nhắn..."
-                  className="flex-1"
-                />
-                <Button
-                  data-ocid="chat.submit_button"
-                  onClick={handleSend}
-                  disabled={!text.trim() || sendMutation.isPending}
-                  size="sm"
-                >
-                  Gửi
-                </Button>
-              </div>
-            </div>
-          ) : (
-            <div className="flex-1 flex items-center justify-center text-muted-foreground text-sm">
-              Chọn người để nhắn tin
-            </div>
-          )}
-        </div>
-      )}
-    </section>
-  );
-}
-
 // ---- APP ----
 export default function App() {
   const [filterSport, setFilterSport] = useState("");
@@ -1680,6 +1964,10 @@ export default function App() {
   const { isDark, toggleDark } = useDarkMode();
   const { loginStatus, identity } = useInternetIdentity();
   const isLoggedIn = loginStatus === "success" && !!identity;
+  const callerPrincipal =
+    isLoggedIn && identity ? identity.getPrincipal().toString() : "";
+  const { notifications, unreadCount, markAllRead, clearAll } =
+    useNotifications(isLoggedIn, callerPrincipal);
 
   function handleSearch(sport: string, location: string) {
     setFilterSport(sport);
@@ -1691,13 +1979,17 @@ export default function App() {
   }
 
   return (
-    <div className="min-h-screen flex flex-col pb-16 sm:pb-0">
+    <div className="min-h-screen flex flex-col pb-16 sm:pb-0 bg-background text-foreground transition-colors duration-300">
       <Toaster position="top-right" />
       <Header
         onCreateClick={scrollToCreate}
         onProfileClick={() => setProfileOpen(true)}
         isDark={isDark}
         toggleDark={toggleDark}
+        notifications={notifications}
+        unreadCount={unreadCount}
+        markAllRead={markAllRead}
+        clearAll={clearAll}
       />
       <ProfileSheet
         open={profileOpen}
@@ -1708,9 +2000,10 @@ export default function App() {
         className="flex-1"
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
-        transition={{ duration: 0.4 }}
+        transition={{ type: "spring", stiffness: 280, damping: 28 }}
       >
         <HeroSection onSearch={handleSearch} />
+        {isLoggedIn && identity && <TodayMatchesSection identity={identity} />}
         {isLoggedIn && identity && <FindPlayersSection identity={identity} />}
         {isLoggedIn && identity && <ChatSection identity={identity} />}
         <LiveMatchesSection
