@@ -839,16 +839,16 @@ const SPORT_DESCRIPTIONS: Record<string, string> = {
 };
 
 const SPORT_VIDEOS: Record<string, string> = {
-  Soccer: "https://www.youtube.com/embed/dLPFqRCMjZs",
-  Basketball: "https://www.youtube.com/embed/TlOqAjSfKaQ",
-  Tennis: "https://www.youtube.com/embed/Yme3kCHFHBo",
-  Volleyball: "https://www.youtube.com/embed/_ePtEMSTWxg",
-  Badminton: "https://www.youtube.com/embed/7Vq3Zy0bFPg",
-  Swimming: "https://www.youtube.com/embed/G64s5rGoQgM",
-  Running: "https://www.youtube.com/embed/A-eEHjJlQqE",
-  Cycling: "https://www.youtube.com/embed/YbCE_sCRJUQ",
-  "Table Tennis": "https://www.youtube.com/embed/GS35_bOBFX8",
-  Futsal: "https://www.youtube.com/embed/lXFBcJxRMBQ",
+  Soccer: "https://www.youtube.com/watch?v=dLPFqRCMjZs",
+  Basketball: "https://www.youtube.com/watch?v=TlOqAjSfKaQ",
+  Tennis: "https://www.youtube.com/watch?v=Yme3kCHFHBo",
+  Volleyball: "https://www.youtube.com/watch?v=_ePtEMSTWxg",
+  Badminton: "https://www.youtube.com/watch?v=7Vq3Zy0bFPg",
+  Swimming: "https://www.youtube.com/watch?v=G64s5rGoQgM",
+  Running: "https://www.youtube.com/watch?v=A-eEHjJlQqE",
+  Cycling: "https://www.youtube.com/watch?v=YbCE_sCRJUQ",
+  "Table Tennis": "https://www.youtube.com/watch?v=GS35_bOBFX8",
+  Futsal: "https://www.youtube.com/watch?v=lXFBcJxRMBQ",
 };
 
 function SportDetailModal({
@@ -903,24 +903,40 @@ function SportDetailModal({
                 ))}
               </div>
 
-              {/* YouTube video */}
+              {/* YouTube video link */}
               {videoUrl && (
-                <div className="rounded-xl overflow-hidden aspect-video bg-black">
-                  <iframe
-                    src={videoUrl}
-                    title={`${sport} video`}
-                    className="w-full h-full"
-                    allowFullScreen
-                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                  />
-                </div>
+                <a
+                  href={videoUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center gap-3 w-full rounded-xl bg-red-600 hover:bg-red-700 text-white px-5 py-3.5 font-semibold transition-colors"
+                >
+                  <svg
+                    className="w-6 h-6 shrink-0"
+                    viewBox="0 0 24 24"
+                    fill="currentColor"
+                    aria-hidden="true"
+                  >
+                    <path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z" />
+                  </svg>
+                  Xem video trên YouTube
+                </a>
               )}
 
               {/* CTA */}
               <Button
                 data-ocid="sport_detail.primary_button"
                 className="w-full h-12 text-base font-semibold bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white rounded-xl"
-                onClick={onClose}
+                onClick={() => {
+                  onClose();
+                  setTimeout(
+                    () =>
+                      document
+                        .getElementById("create")
+                        ?.scrollIntoView({ behavior: "smooth" }),
+                    150,
+                  );
+                }}
               >
                 🏅 Tạo trận ngay
               </Button>
