@@ -289,7 +289,11 @@ function ProfileSheet({
 
   async function handleSave() {
     try {
-      await ensureRegistered();
+      await ensureRegistered().catch(() => {}); // ignore if already registered
+    } catch {
+      // ignore registration errors
+    }
+    try {
       await updateMutation.mutateAsync({
         name: form.name.trim(),
         bio: form.bio.trim(),
