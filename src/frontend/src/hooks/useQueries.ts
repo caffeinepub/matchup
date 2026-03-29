@@ -203,3 +203,14 @@ export function useSendMessage() {
     },
   });
 }
+
+export function useRegisterMe() {
+  const { actor } = useActor();
+  return useMutation({
+    mutationFn: async () => {
+      if (!actor) throw new Error("Not connected");
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      return (actor as any).registerMe() as Promise<void>;
+    },
+  });
+}

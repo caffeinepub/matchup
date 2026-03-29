@@ -65,6 +65,7 @@ import {
   useGetMyProfile,
   useJoinMatch,
   useMatchWithUser,
+  useRegisterMe,
   useSendMessage,
   useUpdateMyProfile,
 } from "./hooks/useQueries";
@@ -376,17 +377,47 @@ function ProfileSheet({
 
             <div className="space-y-2">
               <Label htmlFor="profile-avatar" className="font-semibold text-sm">
-                URL ảnh đại diện
+                Ảnh đại diện
               </Label>
-              <Input
-                id="profile-avatar"
-                data-ocid="profile.avatar_input"
-                placeholder="https://..."
-                value={form.avatarUrl}
-                onChange={(e) =>
-                  setForm((prev) => ({ ...prev, avatarUrl: e.target.value }))
-                }
-              />
+              <div className="flex gap-2 items-center">
+                <Input
+                  id="profile-avatar"
+                  data-ocid="profile.avatar_input"
+                  placeholder="Nhập URL ảnh hoặc tạo tự động..."
+                  value={form.avatarUrl}
+                  onChange={(e) =>
+                    setForm((prev) => ({ ...prev, avatarUrl: e.target.value }))
+                  }
+                  className="flex-1"
+                />
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="shrink-0 text-xs px-3"
+                  onClick={() => {
+                    const seed =
+                      form.name.trim() || Math.random().toString(36).slice(2);
+                    const url = `https://api.dicebear.com/7.x/adventurer/svg?seed=${encodeURIComponent(seed)}&backgroundColor=b6e3f4,c0aede,d1d4f9`;
+                    setForm((prev) => ({ ...prev, avatarUrl: url }));
+                  }}
+                >
+                  🎲 Tạo tự động
+                </Button>
+              </div>
+              {form.avatarUrl && (
+                <img
+                  src={form.avatarUrl}
+                  alt="preview"
+                  className="w-16 h-16 rounded-full object-cover border border-border mt-1"
+                  onError={(e) => {
+                    (e.target as HTMLImageElement).style.display = "none";
+                  }}
+                  onLoad={(e) => {
+                    (e.target as HTMLImageElement).style.display = "block";
+                  }}
+                />
+              )}
             </div>
 
             <div className="space-y-2">
@@ -2146,6 +2177,18 @@ export default function App() {
     isLoggedIn && identity ? identity.getPrincipal().toString() : "";
   const { notifications, unreadCount, markAllRead, clearAll } =
     useNotifications(isLoggedIn, callerPrincipal);
+  const { mutate: doRegisterMe } = useRegisterMe();
+  const registeredRef = useRef(false);
+  // biome-ignore lint/correctness/useExhaustiveDependencies: doRegisterMe is stable
+  useEffect(() => {
+    if (isLoggedIn && !registeredRef.current) {
+      registeredRef.current = true;
+      doRegisterMe();
+    }
+    if (!isLoggedIn) {
+      registeredRef.current = false;
+    }
+  }, [isLoggedIn]);
 
   function handleSearch(sport: string, location: string) {
     setFilterSport(sport);

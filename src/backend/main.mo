@@ -90,6 +90,12 @@ actor {
 
   // Public methods
 
+  // Auto-register the caller as a #user role (called after login)
+  public shared ({ caller }) func registerMe() : async () {
+    if (caller.isAnonymous()) { Runtime.trap("Anonymous not allowed") };
+    AccessControl.initialize(accessControlState, caller, "", "");
+  };
+
   public shared ({ caller }) func createMatch(sport : Text, title : Text, time : Text, location : Text, missing : Int) : async Text {
     if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
       Runtime.trap("Unauthorized: Only users can create matches");
