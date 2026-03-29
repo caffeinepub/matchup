@@ -839,16 +839,16 @@ const SPORT_DESCRIPTIONS: Record<string, string> = {
 };
 
 const SPORT_VIDEOS: Record<string, string> = {
-  Soccer: "https://www.youtube.com/watch?v=dLPFqRCMjZs",
-  Basketball: "https://www.youtube.com/watch?v=TlOqAjSfKaQ",
-  Tennis: "https://www.youtube.com/watch?v=Yme3kCHFHBo",
-  Volleyball: "https://www.youtube.com/watch?v=_ePtEMSTWxg",
-  Badminton: "https://www.youtube.com/watch?v=7Vq3Zy0bFPg",
-  Swimming: "https://www.youtube.com/watch?v=G64s5rGoQgM",
-  Running: "https://www.youtube.com/watch?v=A-eEHjJlQqE",
-  Cycling: "https://www.youtube.com/watch?v=YbCE_sCRJUQ",
-  "Table Tennis": "https://www.youtube.com/watch?v=GS35_bOBFX8",
-  Futsal: "https://www.youtube.com/watch?v=lXFBcJxRMBQ",
+  Soccer: "https://www.youtube.com/watch?v=3STnNa8YPgY",
+  Basketball: "https://www.youtube.com/watch?v=xjIGSdHNiF0",
+  Tennis: "https://www.youtube.com/watch?v=x3RWXxGqOns",
+  Volleyball: "https://www.youtube.com/watch?v=u8nQa1cT8pQ",
+  Badminton: "https://www.youtube.com/watch?v=QD9v_4oNNB4",
+  Swimming: "https://www.youtube.com/watch?v=5HLW2AI0ZdA",
+  Running: "https://www.youtube.com/watch?v=brFHyOtTwH4",
+  Cycling: "https://www.youtube.com/watch?v=uuTATLVVaYY",
+  "Table Tennis": "https://www.youtube.com/watch?v=6kCzQgxPNQM",
+  Futsal: "https://www.youtube.com/watch?v=D5yfq1QBLXU",
 };
 
 function SportDetailModal({
