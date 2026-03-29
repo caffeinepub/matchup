@@ -55,7 +55,10 @@ import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { ChatSection } from "./ChatSection";
 import type { Match, MatchEntry, ProfileEntry } from "./backend.d";
-import { useInternetIdentity } from "./hooks/useInternetIdentity";
+import {
+  type InternetIdentityContext,
+  useInternetIdentity,
+} from "./hooks/useInternetIdentity";
 import { type Notification, useNotifications } from "./hooks/useNotifications";
 import {
   useCreateMatch,
@@ -245,14 +248,17 @@ function ProfileSheet({
   open,
   onOpenChange,
   isLoggedIn,
+  identity,
+  login,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   isLoggedIn: boolean;
+  identity: InternetIdentityContext["identity"];
+  login: InternetIdentityContext["login"];
 }) {
   const { data: profile, isLoading } = useGetMyProfile(isLoggedIn);
   const updateMutation = useUpdateMyProfile();
-  const { mutateAsync: ensureRegistered } = useRegisterMe();
   const [isEditing, setIsEditing] = useState(false);
   const [form, setForm] = useState({
     name: "",
@@ -288,25 +294,55 @@ function ProfileSheet({
   }
 
   async function handleSave() {
-    try {
-      await ensureRegistered().catch(() => {}); // ignore if already registered
-    } catch {
-      // ignore registration errors
+    // 1. Auth guard
+    if (!isLoggedIn || !identity) {
+      console.warn("[ProfileSave] User not authenticated — triggering login");
+      toast.error("Vui lòng đăng nhập để lưu hồ sơ.");
+      login();
+      return;
     }
+
+    // 2. Build payload with correct types
+    const payload = {
+      name: form.name.trim(),
+      bio: form.bio.trim(),
+      avatarUrl: form.avatarUrl.trim(),
+      skills: form.skills
+        .split(",")
+        .map((s: string) => s.trim())
+        .filter(Boolean) as string[],
+    };
+
+    // 3. Debug logging
+    console.log(
+      "[ProfileSave] identity principal:",
+      identity.getPrincipal().toString(),
+    );
+    console.log("[ProfileSave] payload:", payload);
+
+    // 4. Call backend with try/catch
     try {
-      await updateMutation.mutateAsync({
-        name: form.name.trim(),
-        bio: form.bio.trim(),
-        avatarUrl: form.avatarUrl.trim(),
-        skills: form.skills
-          .split(",")
-          .map((s) => s.trim())
-          .filter(Boolean),
-      });
-      toast.success("Đã lưu hồ sơ!");
+      const result = await updateMutation.mutateAsync(payload);
+      console.log("[ProfileSave] backend response:", result);
+
+      // Handle Motoko Result type (ok/err variant)
+      if (
+        result !== undefined &&
+        result !== null &&
+        typeof result === "object" &&
+        "err" in result
+      ) {
+        const errMsg = String((result as { err: unknown }).err);
+        console.error("[ProfileSave] backend returned err:", errMsg);
+        throw new Error(errMsg);
+      }
+
+      toast.success("Đã lưu hồ sơ thành công!");
       setIsEditing(false);
-    } catch {
-      toast.error("Không thể lưu hồ sơ. Vui lòng thử lại.");
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      console.error("[ProfileSave] FAILED:", msg, err);
+      toast.error(`Không thể lưu hồ sơ: ${msg}`);
     }
   }
 
@@ -2177,7 +2213,7 @@ export default function App() {
   const [profileOpen, setProfileOpen] = useState(false);
   const createSectionRef = useRef<HTMLElement>(null);
   const { isDark, toggleDark } = useDarkMode();
-  const { loginStatus, identity } = useInternetIdentity();
+  const { loginStatus, identity, login } = useInternetIdentity();
   const isLoggedIn = loginStatus === "success" && !!identity;
   const callerPrincipal =
     isLoggedIn && identity ? identity.getPrincipal().toString() : "";
@@ -2222,6 +2258,8 @@ export default function App() {
         open={profileOpen}
         onOpenChange={setProfileOpen}
         isLoggedIn={isLoggedIn}
+        identity={identity}
+        login={login}
       />
       <motion.main
         className="flex-1"
