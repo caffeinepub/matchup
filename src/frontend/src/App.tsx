@@ -252,6 +252,7 @@ function ProfileSheet({
 }) {
   const { data: profile, isLoading } = useGetMyProfile(isLoggedIn);
   const updateMutation = useUpdateMyProfile();
+  const { mutateAsync: ensureRegistered } = useRegisterMe();
   const [isEditing, setIsEditing] = useState(false);
   const [form, setForm] = useState({
     name: "",
@@ -288,6 +289,7 @@ function ProfileSheet({
 
   async function handleSave() {
     try {
+      await ensureRegistered();
       await updateMutation.mutateAsync({
         name: form.name.trim(),
         bio: form.bio.trim(),
