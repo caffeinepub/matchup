@@ -13,7 +13,6 @@ import MixinAuthorization "authorization/MixinAuthorization";
 import AccessControl "authorization/access-control";
 
 actor {
-  // Type definitions
   type Match = {
     id : Text;
     sport : Text;
@@ -55,27 +54,29 @@ actor {
     createdAt : Int;
   };
 
-  // State
   let matches = Map.empty<Text, Match>();
   let profiles = Map.empty<Principal, UserProfile>();
   let userMatches = Map.empty<Principal, Set.Set<Principal>>();
   let messages = Map.empty<Text, Message>();
 
-  // Authorization system
   let accessControlState = AccessControl.initState();
   include MixinAuthorization(accessControlState);
 
-  // Generate unique IDs using a persistent counter
   var idCounter = 0;
 
-  // Helper function to generate unique IDs
   func generateId() : Text {
     let id = idCounter;
     idCounter += 1;
     id.toText();
   };
 
-  // Helper: check if two principals are mutual matches
+  // Auto-register caller as #user if not yet registered (fixes race condition)
+  func autoRegister(caller : Principal) {
+    if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
+      AccessControl.initialize(accessControlState, caller, "", "");
+    };
+  };
+
   func areMutual(a : Principal, b : Principal) : Bool {
     let aSet = switch (userMatches.get(a)) {
       case (?s) { s };
@@ -88,28 +89,15 @@ actor {
     aSet.contains(b) and bSet.contains(a);
   };
 
-  // Public methods
-
-  // Auto-register the caller as a #user role (called after login)
   public shared ({ caller }) func registerMe() : async () {
     if (caller.isAnonymous()) { Runtime.trap("Anonymous not allowed") };
     AccessControl.initialize(accessControlState, caller, "", "");
   };
 
   public shared ({ caller }) func createMatch(sport : Text, title : Text, time : Text, location : Text, missing : Int) : async Text {
-    if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
-      Runtime.trap("Unauthorized: Only users can create matches");
-    };
+    autoRegister(caller);
     let id = generateId();
-    let newMatch : Match = {
-      id;
-      sport;
-      title;
-      time;
-      location;
-      missing;
-      createdAt = Time.now();
-    };
+    let newMatch : Match = { id; sport; title; time; location; missing; createdAt = Time.now() };
     matches.add(id, newMatch);
     id;
   };
@@ -135,42 +123,31 @@ actor {
   };
 
   public shared ({ caller }) func joinMatch(id : Text) : async () {
-    if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
-      Runtime.trap("Unauthorized: Only users can join matches");
-    };
+    autoRegister(caller);
     switch (matches.get(id)) {
       case (null) { Runtime.trap("Match not found") };
       case (?match) {
         if (match.missing <= 0) { Runtime.trap("No missing players") };
         let updatedMatch : Match = {
-          id = match.id;
-          sport = match.sport;
-          title = match.title;
-          time = match.time;
-          location = match.location;
-          missing = match.missing - 1;
-          createdAt = match.createdAt;
+          id = match.id; sport = match.sport; title = match.title;
+          time = match.time; location = match.location;
+          missing = match.missing - 1; createdAt = match.createdAt;
         };
         matches.add(id, updatedMatch);
       };
     };
   };
 
-  // Profile methods
-
   public query ({ caller }) func getMyProfile() : async ?UserProfile {
     profiles.get(caller);
   };
 
   public shared ({ caller }) func updateMyProfile(name : Text, bio : Text, avatarUrl : Text, skills : [Text]) : async () {
-    if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
-      Runtime.trap("Unauthorized: Only users can update profiles");
-    };
+    // Auto-register to fix race condition - no longer traps if user isn't pre-registered
+    autoRegister(caller);
     let profile : UserProfile = { name; bio; avatarUrl; skills };
     profiles.add(caller, profile);
   };
-
-  // User matching methods
 
   public query func getAllProfiles() : async [ProfileEntry] {
     profiles.entries().toArray().map(func((owner, profile)) {
@@ -179,9 +156,7 @@ actor {
   };
 
   public shared ({ caller }) func matchWithUser(target : Principal) : async () {
-    if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
-      Runtime.trap("Unauthorized: Only users can match");
-    };
+    autoRegister(caller);
     if (caller == target) { Runtime.trap("Cannot match with yourself") };
     let existing = switch (userMatches.get(caller)) {
       case (?s) { s };
@@ -211,23 +186,13 @@ actor {
     });
   };
 
-  // Chat methods
-
   public shared ({ caller }) func sendMessage(to : Principal, text : Text) : async Text {
-    if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
-      Runtime.trap("Unauthorized: Only users can send messages");
-    };
+    autoRegister(caller);
     if (not areMutual(caller, to)) {
       Runtime.trap("Cannot message: not a mutual match");
     };
     let id = generateId();
-    let msg : Message = {
-      id;
-      from = caller;
-      to;
-      text;
-      createdAt = Time.now();
-    };
+    let msg : Message = { id; from = caller; to; text; createdAt = Time.now() };
     messages.add(id, msg);
     id;
   };
