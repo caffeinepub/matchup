@@ -62,6 +62,7 @@ import {
 import { type Notification, useNotifications } from "./hooks/useNotifications";
 import {
   useCreateMatch,
+  useDeleteExpiredMatches,
   useGetAllMatches,
   useGetAllProfiles,
   useGetMyMatches,
@@ -1789,15 +1790,31 @@ function LiveMatchesSection({
   filterLocation,
 }: { filterSport: string; filterLocation: string }) {
   const { data: matches, isLoading } = useGetAllMatches();
+  const deleteExpiredMutation = useDeleteExpiredMatches();
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: mutate is stable
+  useEffect(() => {
+    if (!matches || matches.length === 0) return;
+    const now = new Date();
+    const expiredIds = matches
+      .filter((m) => new Date(m.time) < now)
+      .map((m) => m.id);
+    if (expiredIds.length > 0) {
+      deleteExpiredMutation.mutate(expiredIds);
+    }
+  }, [matches]);
+
+  const now = new Date();
   const filtered = (matches ?? [])
     .filter((m) => {
+      const matchTime = new Date(m.time);
+      const notExpired = matchTime >= now;
       const matchSport =
         !filterSport || m.sport.toLowerCase() === filterSport.toLowerCase();
       const matchLoc =
         !filterLocation ||
         m.location.toLowerCase().includes(filterLocation.toLowerCase());
-      return matchSport && matchLoc;
+      return notExpired && matchSport && matchLoc;
     })
     .sort((a, b) => {
       const ta = new Date(a.time).getTime();

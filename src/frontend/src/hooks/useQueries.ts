@@ -214,3 +214,18 @@ export function useRegisterMe() {
     },
   });
 }
+
+export function useDeleteExpiredMatches() {
+  const { actor } = useActor();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (ids: string[]) => {
+      if (!actor || ids.length === 0) return 0;
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      return (actor as any).deleteExpiredMatches(ids) as Promise<bigint>;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["matches"] });
+    },
+  });
+}
